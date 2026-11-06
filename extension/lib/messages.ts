@@ -87,10 +87,14 @@ export interface RunProgress {
   tasks_done: number;
   tasks_failed: number;
   ads_seen: number;
+  /** Started by the service on its own (the weekly full pass), not by the user. */
+  auto: boolean;
 }
 
 export interface WorkStatus {
   has_work: boolean;
+  /** Automatic collection: on, the service starts full passes and plans detail pages by itself. */
+  auto: boolean;
   paused_until: string | null;
   run: RunProgress | null;
   next_full_run: string | null;
@@ -105,4 +109,5 @@ export type WorkMessage =
   | { type: 'work-fail'; taskId: number; failure: TaskFailure }
   | { type: 'work-done'; reason: string }
   | { type: 'start-run'; kind: 'full' | 'search'; pageUrl?: string }
-  | { type: 'pause'; hours: number };
+  | { type: 'pause'; hours: number }
+  | { type: 'auto'; enabled: boolean };

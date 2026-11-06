@@ -14,7 +14,7 @@ from typing import Any
 
 from carwatch.models import AdDetail, AdSummary, Capture, IngestResult, PriceChange, SearchItem
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 # A reload of the same page within this window does not count as a new sighting.
 DEDUPE_WINDOW = timedelta(minutes=10)
@@ -74,7 +74,8 @@ CREATE TABLE IF NOT EXISTS runs (
     started_at TEXT NOT NULL,
     finished_at TEXT,
     status TEXT NOT NULL,
-    note TEXT
+    note TEXT,
+    auto INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS tasks (
     id INTEGER PRIMARY KEY,
@@ -178,6 +179,15 @@ class AdFilters:
     limit: int = 500
 
 
+def _upgrade(conn: sqlite3.Connection) -> None:
+    """Add what a database made by an older version is missing (CREATE TABLE IF NOT EXISTS skips existing tables)."""
+    if "auto" not in {row[1] for row in conn.execute("PRAGMA table_info(runs)")}:
+        conn.execute("ALTER TABLE runs ADD COLUMN auto INTEGER NOT NULL DEFAULT 0")
+        # Older databases do not say who started a run. A running full pass is treated as automatic: with the switch
+        # off it waits, and "Pokreni ceo sajt" claims it as the user's.
+        conn.execute("UPDATE runs SET auto = 1 WHERE kind = 'full' AND status = 'running'")
+
+
 class Store:
     def __init__(self, db_path: Path) -> None:
         self.db_path = db_path
@@ -185,6 +195,7 @@ class Store:
         with self.connect() as conn:
             conn.execute("PRAGMA journal_mode=WAL")
             conn.executescript(_SCHEMA)
+            _upgrade(conn)
             conn.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
 
     @contextmanager

@@ -164,6 +164,9 @@ export const startRun = (kind: 'full' | 'search', pageUrl?: string): Promise<Res
 export const pauseWork = (hours: number): Promise<Result<{ ok: boolean }>> =>
   request('/api/work/pause', { method: 'POST', body: JSON.stringify({ hours }) });
 
+export const setAuto = (enabled: boolean): Promise<Result<{ ok: boolean }>> =>
+  request('/api/work/auto', { method: 'POST', body: JSON.stringify({ enabled }) });
+
 export async function status(workerActive: boolean): Promise<StatusResponse> {
   let service: StatusResponse['service'];
   try {

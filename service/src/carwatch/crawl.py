@@ -40,6 +40,10 @@ DETAIL_FRESHNESS = timedelta(days=10)
 # How long details wait for the fair-price model after a full pass.
 VALUATION_WAIT = timedelta(minutes=15)
 
+# With automatic collection off, only work the user started is handed out: their searches and the full passes they
+# started themselves. Detail pages and the automatic pass wait. Expects the task table aliased as ``t``.
+_USER_STARTED = "(t.kind = 'search' AND NOT EXISTS (SELECT 1 FROM runs r WHERE r.id = t.run_id AND r.auto = 1))"
+
 
 def band_query(base: dict[str, str], low: int, high: int | None) -> dict[str, str]:
     query = {k: v for k, v in base.items() if k not in {"priceFrom", "priceTo", "page"}}
@@ -72,10 +76,14 @@ class Crawler:
     # ---- runs -------------------------------------------------------------------------------------
 
     def start_full_run(self, now: datetime) -> int:
-        """Start a pass over the whole site, or return the one already running."""
+        """Start a pass over the whole site, or return the one already running.
+
+        Either way the pass now counts as started by the user, so it runs even with automatic collection off.
+        """
         with self.store.connect() as conn:
             running = self._running_run(conn, "full")
             if running is not None:
+                conn.execute("UPDATE runs SET auto = 0 WHERE id = ?", (running,))
                 return running
             return self._create_run(
                 conn, "full", FULL_ROOT, now, [band_query(FULL_ROOT, lo, hi) for lo, hi in FULL_BANDS]
@@ -89,11 +97,11 @@ class Crawler:
 
     def _create_run(
         self, conn: sqlite3.Connection, kind: str, root: dict[str, str], now: datetime,
-        partitions: list[dict[str, str]],
+        partitions: list[dict[str, str]], auto: bool = False,
     ) -> int:  # fmt: skip
         cur = conn.execute(
-            "INSERT INTO runs (kind, root_query, started_at, status) VALUES (?, ?, ?, 'running')",
-            (kind, json.dumps(root, ensure_ascii=False), _iso(now)),
+            "INSERT INTO runs (kind, root_query, started_at, status, auto) VALUES (?, ?, ?, 'running', ?)",
+            (kind, json.dumps(root, ensure_ascii=False), _iso(now), int(auto)),
         )
         run_id = int(cur.lastrowid or 0)
         for query in partitions:
@@ -119,11 +127,12 @@ class Crawler:
         return datetime.fromisoformat(row["s"]) if row and row["s"] else None
 
     def _maybe_start_full_run(self, conn: sqlite3.Connection, now: datetime) -> None:
-        if not self.settings.auto_full_runs or self._running_run(conn, "full") is not None:
+        if self._running_run(conn, "full") is not None:
             return
         last = self._last_full_start(conn)
         if last is None or now - last >= timedelta(days=self.settings.crawl_interval_days):
-            self._create_run(conn, "full", FULL_ROOT, now, [band_query(FULL_ROOT, lo, hi) for lo, hi in FULL_BANDS])
+            bands = [band_query(FULL_ROOT, lo, hi) for lo, hi in FULL_BANDS]
+            self._create_run(conn, "full", FULL_ROOT, now, bands, auto=True)
 
     # ---- details ----------------------------------------------------------------------------------
 
@@ -202,6 +211,23 @@ class Crawler:
             (_iso(until) if until else None,),
         )
 
+    # ---- automatic collection switch --------------------------------------------------------------
+
+    def auto_enabled(self, conn: sqlite3.Connection) -> bool:
+        """Whether the service plans work on its own: the switch stored in the database, else the setting."""
+        row = conn.execute("SELECT value FROM crawl_state WHERE key = 'auto'").fetchone()
+        if row is None or row["value"] is None:
+            return self.settings.auto_full_runs
+        return bool(row["value"] == "1")
+
+    def set_auto(self, enabled: bool) -> None:
+        with self.store.connect() as conn:
+            conn.execute(
+                "INSERT INTO crawl_state (key, value) VALUES ('auto', ?) "
+                "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                ("1" if enabled else "0",),
+            )
+
     # ---- leasing ----------------------------------------------------------------------------------
 
     def _prepare(self, conn: sqlite3.Connection, now: datetime) -> datetime | None:
@@ -213,8 +239,9 @@ class Crawler:
             "UPDATE tasks SET status = 'pending', leased_at = NULL WHERE status = 'leased' AND leased_at < ?",
             (_iso(now - timedelta(seconds=self.settings.lease_seconds)),),
         )
-        self._maybe_start_full_run(conn, now)
-        self._plan_details(conn, now)
+        if self.auto_enabled(conn):
+            self._maybe_start_full_run(conn, now)
+            self._plan_details(conn, now)
         return None
 
     def lease(self, now: datetime, limit: int = 10) -> WorkBatch:
@@ -225,9 +252,11 @@ class Crawler:
                 return WorkBatch(gap_seconds=gap, paused_until=paused)
             rows = conn.execute(
                 """SELECT t.*, a.url AS ad_url FROM tasks t LEFT JOIN ads a ON a.id = t.ad_id
-                   WHERE t.status = 'pending'
+                   WHERE t.status = 'pending' AND (? OR """
+                + _USER_STARTED
+                + """)
                    ORDER BY CASE t.kind WHEN 'search' THEN 0 ELSE 1 END, t.id LIMIT ?""",
-                (limit,),
+                (self.auto_enabled(conn), limit),
             ).fetchall()
             conn.executemany(
                 "UPDATE tasks SET status = 'leased', leased_at = ? WHERE id = ?",
@@ -334,13 +363,18 @@ class Crawler:
     def status(self, now: datetime) -> WorkStatus:
         with self.store.connect() as conn:
             paused = self._prepare(conn, now)
-            pending = conn.execute("SELECT COUNT(*) FROM tasks WHERE status IN ('pending', 'leased')").fetchone()[0]
+            auto = self.auto_enabled(conn)
+            pending = conn.execute(
+                "SELECT COUNT(*) FROM tasks t WHERE t.status IN ('pending', 'leased') AND (? OR " + _USER_STARTED + ")",
+                (auto,),
+            ).fetchone()[0]
             run = self._progress(conn, self._latest_run_id(conn))
             last_full = self._last_full_start(conn)
             planned = self._details_planned_today(conn, now)
         next_full = last_full + timedelta(days=self.settings.crawl_interval_days) if last_full else None
         return WorkStatus(
             has_work=paused is None and pending > 0,
+            auto=auto,
             paused_until=paused,
             run=run,
             next_full_run=next_full,
@@ -377,6 +411,7 @@ class Crawler:
             tasks_failed=counts["failed"] or 0,
             ads_seen=ads_seen,
             note=run["note"],
+            auto=bool(run["auto"]),
         )
 
     def runs(self, limit: int = 20) -> list[RunProgress]:

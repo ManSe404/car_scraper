@@ -38,7 +38,8 @@ class Settings(BaseSettings):
     # ---- collection (the extension's worker tab asks the service for work) ----
     # A full pass over every passenger-car ad on the site starts when the last one is this old.
     crawl_interval_days: int = 7
-    # Turn off to run only the searches you start yourself (from the popup or the API).
+    # Starting position of the automatic collection switch (automatic full passes and detail pages). Off, only the
+    # searches and passes you start yourself run. Once the switch in the extension popup is used, its stored value wins.
     auto_full_runs: bool = True
     # Ad pages (damage, registration, origin, equipment) fetched per day, one request each.
     details_daily_limit: int = 600

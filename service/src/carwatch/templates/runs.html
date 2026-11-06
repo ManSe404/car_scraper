@@ -19,7 +19,7 @@
       {% if status.run %}
       {% set r = status.run %}
       <dt>Poslednje povlačenje</dt>
-      <dd>{{ 'ceo sajt' if r.kind == 'full' else 'jedna pretraga' }} · {{ r.status }} · od {{ r.started_at | date_time }}</dd>
+      <dd>{{ 'ceo sajt' if r.kind == 'full' else 'jedna pretraga' }} · {{ 'čeka (automatsko isključeno)' if r.status == 'running' and r.auto and not status.auto else r.status }} · od {{ r.started_at | date_time }}</dd>
       <dt>Napredak</dt>
       <dd>
         <div class="bar"><span style="width: {{ (100 * r.tasks_done / r.tasks_total) | round(1) if r.tasks_total else 0 }}%"></span></div>
@@ -27,8 +27,11 @@
           {{ r.ads_seen | thousands }} oglasa viđeno</span>
       </dd>
       {% endif %}
+      <dt>Automatsko</dt><dd>{{ 'uključeno' if status.auto else 'isključeno (uključuje se u ekstenziji)' }}</dd>
+      {% if status.auto %}
       <dt>Sledeće puno</dt><dd>{{ status.next_full_run | date_time if status.next_full_run else 'odmah' }}</dd>
       <dt>Detalji danas</dt><dd>{{ status.details_today }} od {{ status.details_limit }}</dd>
+      {% endif %}
     </dl>
     <div class="section">
       <form class="inline" method="post" action="/runs/start"><button type="submit">Pokreni ceo sajt sada</button></form>

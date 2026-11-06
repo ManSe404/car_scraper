@@ -62,14 +62,18 @@ function render(s: StatusResponse, searchUrl: string | null): void {
     if (work.paused_until) add('Povlačenje', `pauzirano do ${shortTime(work.paused_until)}`);
     else if (s.workerActive) add('Povlačenje', 'radi u pozadinskom tabu');
     else add('Povlačenje', work.has_work ? 'čeka sledeću proveru (do 10 min)' : 'nema posla');
+    add('Automatsko', work.auto ? 'uključeno' : 'isključeno');
     if (work.run) {
       const r = work.run;
       const what = r.kind === 'full' ? 'Ceo sajt' : 'Pretraga';
-      const state = r.status === 'running' ? 'u toku' : r.status === 'done' ? 'završeno' : r.status;
+      const waiting = r.status === 'running' && r.auto && !work.auto;
+      const state = waiting ? 'čeka' : r.status === 'running' ? 'u toku' : r.status === 'done' ? 'završeno' : r.status;
       add(what, `${state} · ${r.tasks_done.toLocaleString('sr-RS')} / ${r.tasks_total.toLocaleString('sr-RS')} strana`);
     }
-    add('Sledeći ceo sajt', work.next_full_run ? shortTime(work.next_full_run) : 'odmah');
-    add('Detalji danas', `${work.details_today} / ${work.details_limit}`);
+    if (work.auto) {
+      add('Sledeći ceo sajt', work.next_full_run ? shortTime(work.next_full_run) : 'odmah');
+      add('Detalji danas', `${work.details_today} / ${work.details_limit}`);
+    }
   }
   add('Snimljeno danas', `${s.stats.today.captures} stranica`);
   if (s.queued > 0) add('Čeka slanje', `${s.queued}`);
@@ -86,6 +90,10 @@ function render(s: StatusResponse, searchUrl: string | null): void {
     }),
   );
   if (s.service.ok) {
+    if (work) {
+      const label = work.auto ? 'Isključi automatsko' : 'Uključi automatsko';
+      actions.append(button(label, () => void ask<Result<unknown>>({ type: 'auto', enabled: !work.auto }).then(load), true));
+    }
     if (searchUrl) {
       actions.append(
         button('Pokupi ovu pretragu', () => void ask<Result<unknown>>({ type: 'start-run', kind: 'search', pageUrl: searchUrl }).then(load), true),

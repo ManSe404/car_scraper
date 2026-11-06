@@ -183,10 +183,14 @@ class RunProgress(_Model):
     tasks_failed: int
     ads_seen: int
     note: str | None = None
+    # Started by the service on its own (the weekly full pass), not by the user.
+    auto: bool = False
 
 
 class WorkStatus(_Model):
     has_work: bool
+    # The automatic collection switch: on, the service starts full passes and plans detail pages by itself.
+    auto: bool
     paused_until: datetime | None = None
     run: RunProgress | None = None
     next_full_run: datetime | None = None

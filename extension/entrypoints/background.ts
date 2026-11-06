@@ -8,6 +8,7 @@ import {
   pauseWork,
   recordError,
   sendCapture,
+  setAuto,
   startRun,
   status,
   workStatus,
@@ -81,6 +82,12 @@ async function handle(message: Message, tabId: number | undefined): Promise<unkn
       const result = await pauseWork(message.hours);
       if (message.hours > 0) await closeWorker(undefined);
       else await tick();
+      return result;
+    }
+    case 'auto': {
+      // Turning it off needs no tab handling: the worker finishes the batch it holds, gets nothing more and closes.
+      const result = await setAuto(message.enabled);
+      if (result.ok && message.enabled) await tick();
       return result;
     }
   }

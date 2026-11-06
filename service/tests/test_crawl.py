@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sqlite3
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -9,7 +10,7 @@ from pydantic import SecretStr
 from carwatch.config import Settings
 from carwatch.crawl import FULL_BANDS, Crawler, split_band
 from carwatch.models import Capture, TaskFailure
-from carwatch.store import Store
+from carwatch.store import SCHEMA_VERSION, Store
 from tests.conftest import load
 
 T0 = datetime(2026, 11, 5, 8, 0, tzinfo=UTC)
@@ -187,3 +188,81 @@ def test_automatic_full_runs_can_be_turned_off(crawl_settings: Settings) -> None
     assert manual.status(T0).has_work is False
     manual.start_search_run({"brand": "Nissan"}, T0)
     assert [t.params["brand"] for t in manual.lease(T0, 10).tasks] == ["Nissan"]
+
+
+def test_switch_off_holds_the_automatic_pass_but_not_the_users_searches(crawler: Crawler) -> None:
+    status = crawler.status(T0)
+    assert status.auto and status.run is not None and status.run.auto
+    crawler.set_auto(False)
+
+    status = crawler.status(T0)
+    assert status.auto is False and status.has_work is False
+    assert crawler.lease(T0, 50).tasks == []
+
+    crawler.start_search_run({"brand": "Nissan"}, T0)
+    assert crawler.status(T0).has_work is True
+    assert [t.params.get("brand") for t in crawler.lease(T0, 50).tasks] == ["Nissan"]
+
+    # Back on, the automatic pass continues where it stopped: its tasks were never dropped.
+    crawler.set_auto(True)
+    assert len(crawler.lease(T0, 50).tasks) == len(FULL_BANDS)
+
+
+def test_switch_off_plans_no_detail_pages(crawler: Crawler) -> None:
+    finish_everything(crawler, T0)
+    crawler.set_auto(False)
+
+    later = T0 + timedelta(minutes=16)
+    assert crawler.lease(later, 50).tasks == []
+    assert crawler.status(later).details_today == 0
+
+    crawler.set_auto(True)
+    assert len(crawler.lease(later, 50).tasks) == 5
+
+
+def test_starting_a_full_pass_claims_the_automatic_one(crawler: Crawler) -> None:
+    automatic = crawler.status(T0).run
+    assert automatic is not None
+    crawler.set_auto(False)
+
+    assert crawler.start_full_run(T0) == automatic.id
+    assert crawler.runs()[0].auto is False
+    assert len(crawler.lease(T0, 50).tasks) == len(FULL_BANDS)
+
+
+def test_switch_is_stored_and_wins_over_the_setting(crawl_settings: Settings) -> None:
+    off = crawl_settings.model_copy(update={"auto_full_runs": False})
+    first = Crawler(Store(off.db_path), off)
+    assert first.status(T0).auto is False
+    first.set_auto(True)
+
+    restarted = Crawler(Store(off.db_path), off)
+    status = restarted.status(T0)
+    assert status.auto is True and status.has_work is True
+
+
+def test_old_database_gets_the_auto_column(tmp_path: Path) -> None:
+    path = tmp_path / "old.db"
+    old = sqlite3.connect(path)
+    old.execute(
+        "CREATE TABLE runs (id INTEGER PRIMARY KEY, kind TEXT NOT NULL, root_query TEXT NOT NULL, "
+        "started_at TEXT NOT NULL, finished_at TEXT, status TEXT NOT NULL, note TEXT)"
+    )
+    old.executemany(
+        "INSERT INTO runs (kind, root_query, started_at, status) VALUES (?, '{}', '2026-11-01', ?)",
+        [("full", "done"), ("full", "running"), ("search", "running")],
+    )
+    old.commit()
+    old.close()
+    store = Store(path)
+
+    with store.connect() as conn:
+        rows = conn.execute("SELECT kind, status, auto FROM runs ORDER BY id").fetchall()
+        version = conn.execute("PRAGMA user_version").fetchone()[0]
+    assert [(r["kind"], r["status"], r["auto"]) for r in rows] == [
+        ("full", "done", 0),
+        ("full", "running", 1),
+        ("search", "running", 0),
+    ]
+    assert version == SCHEMA_VERSION
+    Store(path)  # opening it again changes nothing

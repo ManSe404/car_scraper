@@ -16,7 +16,7 @@ extension/  (WXT, TypeScript, Zod)
    ├─ collector       pages you open: keeps car fields only, drops seller data
    ├─ worker tab      pinned background tab that runs the service's collection work
    ├─ badge           on an ad page: first seen, price changes, days listed
-   ├─ popup           service status, start a search or a full pass, pause
+   ├─ popup           status, automatic collection on/off, start a search or a full pass, pause
    └─ background      POST to 127.0.0.1:8050 with a token; outbox while the service is down
    ▼
 service/    (FastAPI, SQLite, Jinja, scikit-learn)
@@ -41,8 +41,16 @@ your own browser session:
 - **When the site refuses a request** (403, 429, 503 or a challenge page), all collection stops for 12 hours.
   Nothing tries to get around the site's bot protection.
 
-To collect only what you ask for, set `CARWATCH_AUTO_FULL_RUNS=false`. The worker then runs only the searches
-you start with "Pokupi ovu pretragu" in the popup. "Pauziraj 24 h" stops all collection for a day.
+**Turning it off.** In the popup, "Isključi automatsko" turns automatic collection off and "Uključi automatsko"
+turns it back on. While it is off:
+
+- the service starts no full pass and plans no ad pages by itself;
+- an automatic pass that is under way waits, and continues from the same place when you turn it back on;
+- what you start yourself still runs: "Pokupi ovu pretragu" collects the search open in the tab, and "Pokreni
+  ceo sajt" runs a full pass now (it also takes over a waiting automatic pass).
+
+"Pauziraj 24 h" is different: it stops all collection for a day, your own searches included. A new install
+starts with automatic collection on; `CARWATCH_AUTO_FULL_RUNS=false` makes it start off.
 
 ## What you get
 
@@ -93,7 +101,7 @@ The service reads `CARWATCH_*` environment variables (all optional):
 | Variable | Default | Meaning |
 |---|---|---|
 | `CARWATCH_PORT` | `8050` | Service port. Set the same value when you build the extension. |
-| `CARWATCH_AUTO_FULL_RUNS` | `true` | Start a full pass over the site on its own |
+| `CARWATCH_AUTO_FULL_RUNS` | `true` | Starting position of the popup's automatic switch; once you use the switch, its choice wins |
 | `CARWATCH_CRAWL_INTERVAL_DAYS` | `7` | Days between full passes |
 | `CARWATCH_DETAILS_DAILY_LIMIT` | `600` | Ad pages fetched per day for details |
 | `CARWATCH_REQUEST_GAP_SECONDS` | `3.0` | Gap between two requests to the site, before the jitter |

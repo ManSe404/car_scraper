@@ -51,6 +51,20 @@ def test_search_run_from_the_extension(client: TestClient, auth: dict[str, str])
     assert client.post("/api/runs", json={"kind": "search"}, headers=auth).status_code == 422
 
 
+def test_automatic_switch_from_the_extension(client: TestClient, auth: dict[str, str]) -> None:
+    assert client.post("/api/work/auto", json={"enabled": False}).status_code == 401
+
+    assert client.post("/api/work/auto", json={"enabled": False}, headers=auth).json() == {"ok": True}
+    status = client.get("/api/work/status", headers=auth).json()
+    assert status["auto"] is False and status["has_work"] is False
+    assert "isključeno (uključuje se u ekstenziji)" in client.get("/runs").text
+
+    client.post("/api/work/auto", json={"enabled": True}, headers=auth)
+    status = client.get("/api/work/status", headers=auth).json()
+    assert status["auto"] is True and status["has_work"] is True
+    assert status["run"]["auto"] is True
+
+
 def test_ui_buttons_only_accept_posts_from_the_ui(client: TestClient) -> None:
     assert client.post("/runs/pause").status_code == 403
     assert client.post("/runs/pause", headers={"Origin": "https://evil.example"}).status_code == 403

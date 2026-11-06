@@ -37,6 +37,10 @@ class PauseRequest(BaseModel):
     hours: float = 24
 
 
+class AutoRequest(BaseModel):
+    enabled: bool
+
+
 def _int(value: str | None) -> int | None:
     if value is None or value.strip() == "":
         return None
@@ -146,6 +150,11 @@ def register(
     @app.post("/api/work/pause", dependencies=list(authed))
     def pause(body: PauseRequest) -> dict[str, bool]:
         crawler.pause(datetime.now(UTC) + timedelta(hours=body.hours) if body.hours > 0 else None)
+        return {"ok": True}
+
+    @app.post("/api/work/auto", dependencies=list(authed))
+    def set_auto(body: AutoRequest) -> dict[str, bool]:
+        crawler.set_auto(body.enabled)
         return {"ok": True}
 
     # ---- analysis pages --------------------------------------------------------------------------------
