@@ -7,14 +7,13 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
-from pydantic import SecretStr
 
 from carwatch.app import create_app
 from carwatch.config import Settings
+from carwatch.host import Host
 from carwatch.store import Store
 
 FIXTURES = Path(__file__).parent / "fixtures"
-TOKEN = "test-token"
 
 
 def load(name: str) -> dict[str, Any]:
@@ -27,8 +26,6 @@ def load(name: str) -> dict[str, Any]:
 def settings(tmp_path: Path) -> Settings:
     return Settings(
         db_path=tmp_path / "carwatch.db",
-        token=SecretStr(TOKEN),
-        token_file=tmp_path / "token",
         allowed_hosts=("testserver", "127.0.0.1", "localhost"),
         notify=False,
     )
@@ -45,5 +42,5 @@ def client(settings: Settings) -> TestClient:
 
 
 @pytest.fixture
-def auth() -> dict[str, str]:
-    return {"X-Carwatch-Token": TOKEN}
+def host(settings: Settings) -> Host:
+    return Host(settings)

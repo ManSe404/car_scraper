@@ -33,15 +33,14 @@ function serviceLine(s: StatusResponse): HTMLElement {
   const dot = el('span', undefined, `dot ${s.service.ok ? 'ok' : 'bad'}`);
   const text = el('div');
   if (s.service.ok) {
-    text.append(el('div', `Servis radi · ${s.service.ads.toLocaleString('sr-RS')} oglasa u bazi`));
+    text.append(el('div', `Car Watch radi · ${s.service.ads.toLocaleString('sr-RS')} oglasa u bazi`));
   } else if (s.service.kind === 'offline') {
-    text.append(el('div', 'Servis nije pokrenut'));
-    const hint = el('div', undefined, 'muted');
-    hint.append('U ', el('code', 'service/'), ' pokreni ', el('code', 'uv run carwatch serve'));
-    text.append(hint);
-  } else if (s.service.kind === 'auth') {
-    text.append(el('div', 'Servis odbija token'));
-    text.append(el('div', 'Ponovo izgradi ekstenziju (pnpm build) i učitaj je.', 'muted'));
+    text.append(el('div', s.service.error));
+    if (s.service.error.includes('nije instaliran')) {
+      const hint = el('div', undefined, 'muted');
+      hint.append('U ', el('code', 'service/'), ' pokreni ', el('code', 'uv run carwatch install'));
+      text.append(hint);
+    }
   } else {
     text.append(el('div', s.service.error, 'error'));
   }
@@ -84,11 +83,6 @@ function render(s: StatusResponse, searchUrl: string | null): void {
   }
 
   const actions = el('div', undefined, 'actions');
-  actions.append(
-    button('Otvori Car Watch', () => {
-      void browser.tabs.create({ url: `${s.serviceUrl}/market` }).then(() => window.close());
-    }),
-  );
   if (s.service.ok) {
     if (work) {
       const label = work.auto ? 'Isključi automatsko' : 'Uključi automatsko';

@@ -5,7 +5,6 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
-from pydantic import SecretStr
 
 from carwatch.config import Settings
 from carwatch.crawl import FULL_BANDS, Crawler, split_band
@@ -20,8 +19,6 @@ T0 = datetime(2026, 11, 5, 8, 0, tzinfo=UTC)
 def crawl_settings(tmp_path: Path) -> Settings:
     return Settings(
         db_path=tmp_path / "crawl.db",
-        token=SecretStr("t"),
-        token_file=tmp_path / "token",
         partition_cap=100,
         details_daily_limit=5,
         request_gap_seconds=0,

@@ -1,7 +1,7 @@
 [project]
 name = "carwatch"
 version = "0.1.0"
-description = "Local service that stores car ads captured by the Car Watch browser extension and shows them in a small web UI."
+description = "Native messaging host and local store for the car ads the Car Watch browser extension collects."
 requires-python = ">=3.13"
 dependencies = [
     "fastapi>=0.162.0",
@@ -16,6 +16,7 @@ dependencies = [
 
 [project.scripts]
 carwatch = "carwatch.cli:main"
+carwatch-host = "carwatch.host:main"
 
 [build-system]
 requires = ["hatchling"]

@@ -1,11 +1,16 @@
 /**
- * Talks to the local Car Watch service. Runs in the background service worker only.
- * Captures made while the service is down wait in an outbox (extension storage) and are sent later.
+ * Talks to Car Watch on this computer through native messaging. Runs in the background service worker only.
+ *
+ * Chrome starts the host program (service/: carwatch-host) for every message and hands back its one reply; only this
+ * extension's id may call it (service/src/carwatch/install.py). Captures made while the host is missing or failing to
+ * start wait in an outbox (extension storage) and are sent later.
  */
 import { browser } from 'wxt/browser';
 import type { Capture } from './extract';
 import type {
   CaptureResponse,
+  HostReply,
+  HostRequest,
   IngestResult,
   Result,
   ServiceErrorKind,
@@ -16,9 +21,9 @@ import type {
   WorkStatus,
 } from './messages';
 
-export const SERVICE_URL = __CARWATCH_SERVICE__;
-const TOKEN = __CARWATCH_TOKEN__;
-const TIMEOUT_MS = 5000;
+const HOST_NAME = 'io.github.manse404.carwatch';
+// The host answers in well under a second; a valuation runs in its own process and does not delay the reply.
+const TIMEOUT_MS = 30_000;
 const OUTBOX_LIMIT = 100;
 
 class ServiceError extends Error {
@@ -30,29 +35,34 @@ class ServiceError extends Error {
   }
 }
 
-async function call(path: string, init: RequestInit = {}): Promise<Response> {
-  let response: Response;
-  try {
-    response = await fetch(`${SERVICE_URL}${path}`, {
-      ...init,
-      headers: { 'Content-Type': 'application/json', 'X-Carwatch-Token': TOKEN },
-      signal: AbortSignal.timeout(TIMEOUT_MS),
-    });
-  } catch {
-    throw new ServiceError(`Servis nije dostupan na ${SERVICE_URL}`, 'offline');
-  }
-  if (response.status === 401) throw new ServiceError('Servis odbija token (ponovo izgradi ekstenziju)', 'auth');
-  if (!response.ok) {
-    const body = (await response.text()).slice(0, 300);
-    throw new ServiceError(`Servis je vratio ${response.status}: ${body}`, 'rejected');
-  }
-  return response;
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`nema odgovora posle ${ms / 1000} s`)), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
 
-async function post(capture: Capture): Promise<IngestResult> {
-  const response = await call('/api/captures', { method: 'POST', body: JSON.stringify(capture) });
-  return (await response.json()) as IngestResult;
+/** Send one request to the host; offline when it cannot answer now (worth retrying), rejected when it refuses. */
+async function host<T>(request: HostRequest): Promise<T> {
+  let reply: HostReply<T> | undefined;
+  try {
+    reply = (await withTimeout(browser.runtime.sendNativeMessage(HOST_NAME, request), TIMEOUT_MS)) as HostReply<T>;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (/not found/i.test(message)) {
+      throw new ServiceError('Car Watch nije instaliran na ovom računaru', 'offline');
+    }
+    throw new ServiceError(`Car Watch ne odgovara: ${message}`, 'offline');
+  }
+  if (!reply) throw new ServiceError('Car Watch nije vratio odgovor', 'offline');
+  if (!reply.ok) {
+    throw new ServiceError(`Car Watch: ${reply.error}`, reply.retry ? 'offline' : 'rejected');
+  }
+  return reply.value;
 }
+
+const post = (capture: Capture): Promise<IngestResult> => host<IngestResult>({ type: 'capture', capture });
 
 // ---- stats and outbox (extension storage) -----------------------------------------------------
 
@@ -141,50 +151,49 @@ export async function sendCapture(capture: Capture, warnings: string[]): Promise
   }
 }
 
-async function request<T>(path: string, init: RequestInit = {}): Promise<Result<T>> {
+async function request<T>(message: HostRequest): Promise<Result<T>> {
   try {
-    const response = await call(path, init);
-    return { ok: true, value: (await response.json()) as T };
+    return { ok: true, value: await host<T>(message) };
   } catch (error) {
     const err = error instanceof ServiceError ? error : new ServiceError(String(error), 'rejected');
     return { ok: false, kind: err.kind, error: err.message };
   }
 }
 
-export const workStatus = (): Promise<Result<WorkStatus>> => request<WorkStatus>('/api/work/status');
-
-export const nextWork = (): Promise<Result<WorkBatch>> => request<WorkBatch>('/api/work?limit=10');
+export const nextWork = (): Promise<Result<WorkBatch>> => request<WorkBatch>({ type: 'work-next', limit: 10 });
 
 export const failTask = (taskId: number, failure: TaskFailure): Promise<Result<{ ok: boolean }>> =>
-  request(`/api/work/${taskId}/fail`, { method: 'POST', body: JSON.stringify(failure) });
+  request({ type: 'work-fail', task_id: taskId, failure });
 
 export const startRun = (kind: 'full' | 'search', pageUrl?: string): Promise<Result<{ run_id: number }>> =>
-  request('/api/runs', { method: 'POST', body: JSON.stringify({ kind, page_url: pageUrl ?? null }) });
+  request({ type: 'start-run', kind, page_url: pageUrl ?? null });
 
-export const pauseWork = (hours: number): Promise<Result<{ ok: boolean }>> =>
-  request('/api/work/pause', { method: 'POST', body: JSON.stringify({ hours }) });
+export const pauseWork = (hours: number): Promise<Result<{ ok: boolean }>> => request({ type: 'pause', hours });
 
-export const setAuto = (enabled: boolean): Promise<Result<{ ok: boolean }>> =>
-  request('/api/work/auto', { method: 'POST', body: JSON.stringify({ enabled }) });
+export const setAuto = (enabled: boolean): Promise<Result<{ ok: boolean }>> => request({ type: 'auto', enabled });
+
+interface HostStatus {
+  version: string;
+  ads: number;
+  captures: number;
+  work: WorkStatus;
+}
+
+export async function workStatus(): Promise<Result<WorkStatus>> {
+  const result = await request<HostStatus>({ type: 'status' });
+  return result.ok ? { ok: true, value: result.value.work } : result;
+}
 
 export async function status(workerActive: boolean): Promise<StatusResponse> {
-  let service: StatusResponse['service'];
-  try {
-    const response = await call('/api/health');
-    const body = (await response.json()) as { ads: number; captures: number };
-    service = { ok: true, ads: body.ads, captures: body.captures };
-    void flushOutbox();
-  } catch (error) {
-    const err = error instanceof ServiceError ? error : new ServiceError(String(error), 'rejected');
-    service = { ok: false, kind: err.kind, error: err.message };
-  }
-  const work = service.ok ? await workStatus() : null;
+  const result = await request<HostStatus>({ type: 'status' });
+  if (result.ok) void flushOutbox();
   return {
-    service,
-    work: work?.ok ? work.value : null,
+    service: result.ok
+      ? { ok: true, ads: result.value.ads, captures: result.value.captures }
+      : { ok: false, kind: result.kind, error: result.error },
+    work: result.ok ? result.value.work : null,
     workerActive,
     stats: await readStats(),
     queued: (await readOutbox()).length,
-    serviceUrl: SERVICE_URL,
   };
 }

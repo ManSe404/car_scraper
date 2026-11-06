@@ -1,6 +1,6 @@
 import type { Capture } from './extract';
 
-/** What the local service answers to a capture (service/src/carwatch/models.py: IngestResult). */
+/** What the host answers to a capture (service/src/carwatch/models.py: IngestResult). */
 export interface AdSummary {
   known: boolean;
   id: number;
@@ -25,7 +25,8 @@ export interface IngestResult {
   summary: AdSummary | null;
 }
 
-export type ServiceErrorKind = 'offline' | 'auth' | 'rejected';
+/** offline: Chrome could not start the host (not installed, crashed); rejected: the host answered with an error. */
+export type ServiceErrorKind = 'offline' | 'rejected';
 
 export type CaptureResponse =
   | { ok: true; result: IngestResult }
@@ -44,7 +45,6 @@ export interface StatusResponse {
   workerActive: boolean;
   stats: Stats;
   queued: number;
-  serviceUrl: string;
 }
 
 export type Message =
@@ -111,3 +111,17 @@ export type WorkMessage =
   | { type: 'start-run'; kind: 'full' | 'search'; pageUrl?: string }
   | { type: 'pause'; hours: number }
   | { type: 'auto'; enabled: boolean };
+
+// ---- native messaging host (service/src/carwatch/host.py: HostRequest, Host.handle) ------------------------
+
+export type HostRequest =
+  | { type: 'status' }
+  | { type: 'capture'; capture: Capture }
+  | { type: 'work-next'; limit: number }
+  | { type: 'work-fail'; task_id: number; failure: TaskFailure }
+  | { type: 'start-run'; kind: 'full' | 'search'; page_url: string | null }
+  | { type: 'pause'; hours: number }
+  | { type: 'auto'; enabled: boolean };
+
+/** retry: the request was fine but the host failed (e.g. a locked database); worth sending again later. */
+export type HostReply<T> = { ok: true; value: T } | { ok: false; error: string; retry: boolean };

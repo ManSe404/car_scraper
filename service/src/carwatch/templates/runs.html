@@ -2,7 +2,7 @@
 {% block title %}Povlačenje · Car Watch{% endblock %}
 {% block content %}
 <h1>Povlačenje podataka</h1>
-<p class="muted">Ekstenzija na svakih 10 minuta pita ovaj servis ima li posla. Kad ima, otvori zakačen tab sa sajtom u pozadini,
+<p class="muted">Ekstenzija na svakih 10 minuta pita Car Watch ima li posla. Kad ima, otvori zakačen tab sa sajtom u pozadini,
   povlači stranu po stranu sa pauzom od oko {{ settings.request_gap_seconds | round(1) }} s i zatvori tab kad završi. Radi samo dok je
   Chrome otvoren. Ako sajt odbije zahteve, sve staje na {{ settings.blocked_pause_hours }} h.</p>
 

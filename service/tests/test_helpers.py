@@ -1,14 +1,11 @@
 from __future__ import annotations
 
-import os
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
 
 import pytest
 
 from carwatch import fmt, notify
 from carwatch.charts import price_chart_svg
-from carwatch.config import ensure_token_file
 from carwatch.models import PriceChange
 
 T0 = datetime(2026, 11, 4, 20, 0, tzinfo=UTC)
@@ -34,14 +31,6 @@ def test_chart_draws_one_dot_per_sighting() -> None:
     assert svg.count("<circle") == 2
     assert "6.399 €" in svg and "5.999 €" in svg
     assert price_chart_svg([], end=T0, tz="UTC") == ""
-
-
-def test_token_file_is_private_and_stable(tmp_path: Path) -> None:
-    path = tmp_path / "carwatch" / "token"
-    first = ensure_token_file(path)
-    assert len(first) >= 32
-    assert oct(os.stat(path).st_mode & 0o777) == "0o600"
-    assert ensure_token_file(path) == first
 
 
 def test_notifications_only_for_drops(monkeypatch: pytest.MonkeyPatch) -> None:

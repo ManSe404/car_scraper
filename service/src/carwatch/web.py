@@ -1,44 +1,26 @@
-"""Routes for collection work (used by the extension) and the analysis pages (market, compare, deals, runs)."""
+"""UI routes for the analysis pages (market, compare, deals) and the collection runs page."""
 
 from __future__ import annotations
 
 import logging
-import threading
-from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
-from typing import Any, Literal
-from urllib.parse import parse_qsl, urlencode, urlparse
+from typing import Any
+from urllib.parse import urlencode, urlparse
 
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
-from fastapi.params import Depends
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
-from pydantic import BaseModel
 
-from carwatch import analysis
+from carwatch import analysis, jobs
 from carwatch.charts import km_scatter_svg, year_lines_svg
 from carwatch.config import Settings
 from carwatch.crawl import Crawler
-from carwatch.models import TaskFailure, WorkBatch, WorkStatus
 from carwatch.store import Store
 
 log = logging.getLogger(__name__)
 
 MAX_COMPARE = 6
 MAX_SCATTER = 3
-
-
-class RunRequest(BaseModel):
-    kind: Literal["full", "search"] = "full"
-    page_url: str | None = None
-
-
-class PauseRequest(BaseModel):
-    hours: float = 24
-
-
-class AutoRequest(BaseModel):
-    enabled: bool
 
 
 def _int(value: str | None) -> int | None:
@@ -88,21 +70,9 @@ def register(
     store: Store,
     crawler: Crawler,
     templates: Jinja2Templates,
-    authed: Sequence[Depends],
 ) -> None:
-    valuation_lock = threading.Lock()
-
     def revalue() -> None:
-        if not valuation_lock.acquire(blocking=False):
-            return
-        try:
-            analysis.run_valuation(store)
-        except Exception:
-            log.exception("valuation failed")
-        finally:
-            valuation_lock.release()
-
-    app.state.revalue = revalue
+        jobs.revalue(settings)
 
     def same_origin(request: Request) -> None:
         # Form posts from other sites carry their own Origin; only this UI may press these buttons.
@@ -116,46 +86,6 @@ def register(
             "chassis": sorted({c.chassis for c in cars if c.chassis}),
             "brands": sorted({c.brand for c in cars}),
         }
-
-    # ---- API for the extension's worker tab ----------------------------------------------------------
-
-    @app.get("/api/work/status", dependencies=list(authed))
-    def work_status() -> WorkStatus:
-        return crawler.status(datetime.now(UTC))
-
-    @app.get("/api/work", dependencies=list(authed))
-    def work(limit: int = 10) -> WorkBatch:
-        return crawler.lease(datetime.now(UTC), max(1, min(limit, 50)))
-
-    @app.post("/api/work/{task_id}/fail", dependencies=list(authed))
-    def work_fail(task_id: int, failure: TaskFailure, background: BackgroundTasks) -> dict[str, bool]:
-        finished = crawler.fail(task_id, failure, datetime.now(UTC))
-        if failure.reason == "blocked":
-            log.warning("site refused a request (task %s): %s %s", task_id, failure.status, failure.message)
-        if finished is not None:
-            background.add_task(revalue)
-        return {"ok": True}
-
-    @app.post("/api/runs", dependencies=list(authed))
-    def start_run(request_body: RunRequest) -> dict[str, int]:
-        now = datetime.now(UTC)
-        if request_body.kind == "search":
-            if not request_body.page_url:
-                raise HTTPException(status_code=422, detail="page_url je obavezan za pretragu")
-            query = dict(parse_qsl(urlparse(request_body.page_url).query))
-            return {"run_id": crawler.start_search_run(query, now)}
-        crawler.pause(None)
-        return {"run_id": crawler.start_full_run(now)}
-
-    @app.post("/api/work/pause", dependencies=list(authed))
-    def pause(body: PauseRequest) -> dict[str, bool]:
-        crawler.pause(datetime.now(UTC) + timedelta(hours=body.hours) if body.hours > 0 else None)
-        return {"ok": True}
-
-    @app.post("/api/work/auto", dependencies=list(authed))
-    def set_auto(body: AutoRequest) -> dict[str, bool]:
-        crawler.set_auto(body.enabled)
-        return {"ok": True}
 
     # ---- analysis pages --------------------------------------------------------------------------------
 
@@ -243,7 +173,7 @@ def register(
                 "status": crawler.status(now),
                 "runs": crawler.runs(),
                 "valuation": analysis.valuation_meta(store),
-                "valuating": valuation_lock.locked(),
+                "valuating": jobs.revalue_running(settings),
                 "settings": settings,
                 "page": "runs",
             },

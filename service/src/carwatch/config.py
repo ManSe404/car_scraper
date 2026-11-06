@@ -1,20 +1,18 @@
-"""Settings for the Car Watch service.
+"""Settings for Car Watch.
 
-Values come from environment variables prefixed with ``CARWATCH_``. The shared token lives in a file
-(``~/.config/carwatch/token`` by default) so the extension build can read the same value.
+Values come from environment variables prefixed with ``CARWATCH_``. The native messaging host is started by Chrome, so
+it sees Chrome's environment, not the one of your shell; without variables the defaults below apply.
 """
 
 from __future__ import annotations
 
 import os
-import secrets
 from pathlib import Path
 
-from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-def _config_home() -> Path:
+def config_home() -> Path:
     return Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config")
 
 
@@ -25,17 +23,16 @@ def _data_home() -> Path:
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="CARWATCH_", frozen=True)
 
+    # The web UI (`carwatch ui`) listens here.
     host: str = "127.0.0.1"
     port: int = 8050
     db_path: Path = _data_home() / "carwatch" / "carwatch.db"
-    token_file: Path = _config_home() / "carwatch" / "token"
-    token: SecretStr | None = None
-    # Host headers the service answers to. Anything else is rejected, which blocks DNS-rebinding pages.
+    # Host headers the UI answers to. Anything else is rejected, which blocks DNS-rebinding pages.
     allowed_hosts: tuple[str, ...] = ("127.0.0.1", "localhost")
     notify: bool = True
     timezone: str = "Europe/Belgrade"
 
-    # ---- collection (the extension's worker tab asks the service for work) ----
+    # ---- collection (the extension's worker tab asks the host for work) ----
     # A full pass over every passenger-car ad on the site starts when the last one is this old.
     crawl_interval_days: int = 7
     # Starting position of the automatic collection switch (automatic full passes and detail pages). Off, only the
@@ -56,21 +53,3 @@ class Settings(BaseSettings):
     blocked_pause_hours: int = 12
     # Raw capture payloads older than this are emptied (the parsed ads and sightings stay).
     capture_retention_days: int = 30
-
-    def resolved_token(self) -> SecretStr:
-        """Return the token from settings, or from the token file (created on first use)."""
-        if self.token is not None:
-            return self.token
-        return SecretStr(ensure_token_file(self.token_file))
-
-
-def ensure_token_file(path: Path) -> str:
-    """Read the token file, creating it with a fresh random token (mode 0600) if it is missing."""
-    if path.exists():
-        return path.read_text(encoding="utf-8").strip()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    token = secrets.token_urlsafe(32)
-    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-    with os.fdopen(fd, "w", encoding="utf-8") as handle:
-        handle.write(token + "\n")
-    return token
