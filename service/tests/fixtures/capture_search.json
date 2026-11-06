@@ -1,0 +1,90 @@
+{
+  "kind": "search",
+  "page_url": "https://www.polovniautomobili.com/auto-oglasi/pretraga?brand=Nissan&model%5B%5D=Juke&priceTo=8000&showOldNew=all&yearFrom=2013",
+  "captured_at": "2026-11-04T20:00:00.000Z",
+  "extension_version": "test",
+  "search": {
+    "query": {
+      "brand": "Nissan",
+      "model": [
+        "Juke"
+      ],
+      "showOldNew": "all",
+      "yearFrom": 2013,
+      "sort": "basic",
+      "priceTo": 8000
+    },
+    "page": 1,
+    "page_count": 3,
+    "total_items": 61
+  },
+  "items": [
+    {
+      "id": 10000001,
+      "title": "Nissan Juke 1.5 dci",
+      "url": "https://www.polovniautomobili.com/auto-oglasi/10000001/nissan-juke-15-dci",
+      "brand": "Nissan",
+      "model": "Juke",
+      "year": 2013,
+      "mileage_km": 223854,
+      "fuel": "Dizel",
+      "engine_cc": 1461,
+      "power_kw": 81,
+      "horse_power": 110,
+      "gearbox": "Manuelni 6 brzina",
+      "chassis": "Džip/SUV",
+      "doors": "4/5 vrata",
+      "seats": "5 sedišta",
+      "price": 6399,
+      "base_price": 6899,
+      "currency": "€",
+      "discount_pct": 7,
+      "status": "active",
+      "condition_new": false,
+      "registration_in_price": true,
+      "city": "Ruma",
+      "is_dealer": false,
+      "image_url": "https://cdn.polovniautomobili.com/user-images/thumbs/1000/10000001/abc123-370x278.jpg",
+      "images_count": 15,
+      "tags": [
+        "Na ime kupca"
+      ],
+      "updated_at": "2026-11-04 19:51:51",
+      "lifted_at": "2026-11-04 19:51:51",
+      "featured": true
+    },
+    {
+      "id": 10000002,
+      "title": "Nissan Juke 1.6 Acenta",
+      "url": "https://www.polovniautomobili.com/auto-oglasi/10000002/nissan-juke-16-acenta",
+      "brand": "Nissan",
+      "model": "Juke",
+      "year": 2014,
+      "mileage_km": 145000,
+      "fuel": "Benzin",
+      "engine_cc": 1598,
+      "power_kw": 86,
+      "horse_power": 117,
+      "gearbox": "Automatski / poluautomatski",
+      "chassis": "Džip/SUV",
+      "doors": "4/5 vrata",
+      "seats": "5 sedišta",
+      "price": 7990,
+      "base_price": 7990,
+      "currency": "€",
+      "discount_pct": null,
+      "status": "active",
+      "condition_new": false,
+      "registration_in_price": false,
+      "city": "Novi Sad",
+      "is_dealer": true,
+      "image_url": "https://cdn.polovniautomobili.com/user-images/thumbs/1000/10000002/def456-370x278.jpg",
+      "images_count": 20,
+      "tags": [],
+      "updated_at": "2026-11-03 10:00:00",
+      "lifted_at": "2026-11-04 08:00:00",
+      "featured": true
+    }
+  ],
+  "ad": null
+}

@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}{{ ad.title }} · Car Watch{% endblock %}
+{% block content %}
+<p class="small"><a href="/">← svi oglasi</a></p>
+<h1>{{ ad.title }}</h1>
+<p class="muted">
+  {{ ad.brand or '' }} {{ ad.model or '' }} · {{ ad.year or '—' }} · {{ ad.mileage_km | km }} · {{ ad.city or '—' }}
+  · {{ 'diler' if ad.is_dealer else ('privatno' if ad.is_dealer is not none else '') }}
+  · <a href="{{ ad.url }}" target="_blank" rel="noopener noreferrer">otvori oglas na sajtu ↗</a>
+</p>
+
+<div class="grid2">
+  <div class="card">
+    <h2>Cena</h2>
+    <div class="price-big">{{ ad.price | money(ad.currency) }}
+      {% set delta = (ad.price - ad.first_price) if (ad.price is not none and ad.first_price is not none) else 0 %}
+      {% if delta < 0 %}<span class="delta down">▼ {{ (-delta) | thousands }} od prve</span>
+      {% elif delta > 0 %}<span class="delta up">▲ {{ delta | thousands }} od prve</span>{% endif %}
+    </div>
+    <dl class="facts section">
+      <dt>Prva viđena</dt><dd>{{ ad.first_price | money(ad.currency) }} ({{ ad.first_seen | date }})</dd>
+      <dt>Najniža / najviša</dt><dd>{{ ad.min_price | money(ad.currency) }} / {{ ad.max_price | money(ad.currency) }}</dd>
+      <dt>Promena cene</dt><dd>{{ summary.price_changes }}×</dd>
+      {% if ad.base_price and ad.base_price != ad.price %}<dt>Osnovna cena na sajtu</dt><dd>{{ ad.base_price | money(ad.currency) }}{% if ad.discount_pct %} (popust {{ ad.discount_pct | round(0) | int }}%){% endif %}</dd>{% endif %}
+      <dt>Viđen</dt><dd>{{ summary.days_seen }} {{ 'dan' if summary.days_seen == 1 else 'dana' }}, poslednji put {{ ad.last_seen | date_time }}</dd>
+      {% if ad.published_at %}<dt>Objavljen</dt><dd>{{ ad.published_at | date }} ({{ ad.published_at | days_since }} dana na sajtu)</dd>{% endif %}
+      {% if ad.lifted_at %}<dt>Poslednje podizanje</dt><dd>{{ ad.lifted_at | date_time }}</dd>{% endif %}
+    </dl>
+    {% if chart %}<div class="section">{{ chart | safe }}</div>
+    {% else %}<p class="muted small section">Grafikon cene se pojavljuje od drugog viđenja oglasa.</p>{% endif %}
+  </div>
+
+  <div class="card">
+    <h2>Vozilo</h2>
+    {% if ad.image_url %}<img src="{{ ad.image_url }}" alt="" style="max-width:100%; border-radius:8px; margin-bottom:12px">{% endif %}
+    <dl class="facts">
+      <dt>Karoserija</dt><dd>{{ ad.chassis or '—' }}</dd>
+      <dt>Gorivo</dt><dd>{{ ad.fuel or '—' }}</dd>
+      <dt>Kubikaža</dt><dd>{% if ad.engine_cc %}{{ ad.engine_cc | thousands }} cm³{% else %}—{% endif %}</dd>
+      <dt>Snaga</dt><dd>{% if ad.power_kw %}{{ ad.power_kw }} kW / {{ ad.horse_power or '—' }} KS{% else %}—{% endif %}</dd>
+      <dt>Menjač</dt><dd>{{ ad.gearbox or '—' }}</dd>
+      <dt>Vrata / sedišta</dt><dd>{{ ad.doors or '—' }} / {{ ad.seats or '—' }}</dd>
+      <dt>Registracija u ceni</dt><dd>{{ 'da' if ad.registration_in_price else ('ne' if ad.registration_in_price is not none else '—') }}</dd>
+      {% if details %}
+      <dt>Oštećenje</dt><dd>{{ details.damaged or '—' }}</dd>
+      <dt>Registrovan do</dt><dd>{{ details.registration or '—' }}</dd>
+      <dt>Poreklo</dt><dd>{{ details.origin or '—' }}{% if details.from_abroad %} <span class="pill warn">uvoz</span>{% endif %}</dd>
+      <dt>Zemlja porekla</dt><dd>{{ details.country_origin or '—' }}</dd>
+      <dt>Pogon</dt><dd>{{ details.drive or '—' }}</dd>
+      <dt>Emisija</dt><dd>{{ details.emission_class or '—' }}</dd>
+      <dt>Klima</dt><dd>{{ details.air_condition or '—' }}</dd>
+      <dt>Boja</dt><dd>{{ details.color or '—' }}{% if details.interior_color %} · enterijer {{ details.interior_color }}{% endif %}</dd>
+      <dt>Zamena</dt><dd>{{ details.trade or '—' }}</dd>
+      <dt>Fiksna cena</dt><dd>{{ 'da' if details.price_fixed else 'ne' }}{% if details.reserved %} · <span class="pill warn">rezervisan</span>{% endif %}</dd>
+      {% if details.registration_cost_min %}<dt>Registracija košta</dt><dd>{{ details.registration_cost_min | thousands }} – {{ details.registration_cost_max | thousands }} <span class="muted small">(okvirno, kako navodi sajt)</span></dd>{% endif %}
+      {% endif %}
+    </dl>
+    {% if not details %}
+    <p class="muted small section">Detalji (oštećenje, registracija, oprema, opis) se snimaju kad otvoriš sam oglas na sajtu.</p>
+    {% endif %}
+  </div>
+</div>
+
+{% if details %}
+<div class="grid2 section">
+  <div class="card">
+    <h2>Stanje i oprema</h2>
+    {% for c in details.condition %}<span class="chip">{{ c }}</span>{% endfor %}
+    {% for e in details.equipment %}<span class="chip">{{ e }}</span>{% endfor %}
+    {% if details.safety %}<h2 class="section">Sigurnost</h2>{% for s in details.safety %}<span class="chip">{{ s }}</span>{% endfor %}{% endif %}
+  </div>
+  <div class="card">
+    <h2>Opis</h2>
+    <div class="desc">{{ details.description or '—' }}</div>
+    <p class="small muted">Brojevi telefona i e-mail adrese su uklonjeni pre čuvanja.</p>
+  </div>
+</div>
+{% endif %}
+
+<div class="card section">
+  <h2>Viđenja</h2>
+  <table>
+    <thead><tr><th>Vreme</th><th>Gde</th><th class="num">Cena</th><th>Status</th></tr></thead>
+    <tbody>
+    {% for o in observations | reverse %}
+      <tr>
+        <td>{{ o.seen_at | date_time }}</td>
+        <td>{{ 'stranica oglasa' if o.source == 'ad' else 'pretraga' }}</td>
+        <td class="num">{{ o.price | money(ad.currency) }}</td>
+        <td>{{ o.status or '—' }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

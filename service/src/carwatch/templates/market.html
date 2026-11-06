@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% from "_filters.html" import filter_form %}
+{% block title %}Tržište · Car Watch{% endblock %}
+{% block stats %}{{ snapshot_size | thousands }} aktivnih oglasa u poslednjem snimku{% endblock %}
+{% block content %}
+<h1>Tržište po modelima</h1>
+<p class="muted">Svaki red je jedan model iz poslednjeg punog povlačenja. Filtrima suziš tržište na ono što ti odgovara,
+  pa štikliraš do 6 modela i porediš ih.</p>
+
+{{ filter_form('/market', f, facets) }}
+
+{% if not rows %}
+<div class="card empty">
+  {% if snapshot_size == 0 %}
+    Još nema podataka. Prvo puno povlačenje pokreće ekstenzija; stanje vidiš na stranici <a href="/runs">Povlačenje</a>.
+  {% else %}
+    Nijedan model nema bar {{ f.min_count }} oglasa za ove filtere.
+  {% endif %}
+</div>
+{% else %}
+<form method="get" action="/compare">
+  {% for name, value in carry_items.items() if name != 'price_max' %}<input type="hidden" name="{{ name }}" value="{{ value }}">{% endfor %}
+  <div class="filters">
+    <label>Budžet za poređenje<input class="short" name="budget" inputmode="numeric" value="{{ f.price_max or '' }}"></label>
+    <button type="submit">Uporedi štiklirane (do 6)</button>
+  </div>
+  <div class="card" style="padding:0; overflow-x:auto">
+  <table>
+    <thead>
+      <tr>
+        <th></th><th>Model</th><th class="num">Oglasa</th><th class="num">Cena (medijana)</th><th class="num">Srednja polovina cena</th>
+        <th class="num">Godište</th><th class="num">Km</th><th class="num">Snaga</th>
+        <th class="num" title="Koliko vrednosti auto ovog modela gubi sa svakom godinom starosti">Gubi godišnje</th>
+        <th class="num" title="Oglasi bar 10% ispod procenjene fer cene">Dobre ponude</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for r in rows %}
+      <tr>
+        <td><input type="checkbox" name="m" value="{{ r.brand }}|{{ r.model }}" aria-label="Uporedi {{ r.brand }} {{ r.model }}"></td>
+        <td><strong>{{ r.brand }} {{ r.model }}</strong></td>
+        <td class="num">{{ r.n | thousands }}</td>
+        <td class="num"><strong>{{ r.price_med | money }}</strong></td>
+        <td class="num small muted">{{ r.price_p25 | thousands }} – {{ r.price_p75 | thousands }} €</td>
+        <td class="num">{{ r.year_med | round | int if r.year_med else '—' }}</td>
+        <td class="num">{{ r.km_med | km if r.km_med is not none else '—' }}</td>
+        <td class="num">{{ (r.kw_med | round | int) ~ ' kW' if r.kw_med else '—' }}</td>
+        <td class="num">{{ ((r.loss_per_year * 100) | round(1)) ~ ' %' if r.loss_per_year is not none else '—' }}</td>
+        <td class="num">
+          {% if r.good_deals %}<a href="/deals?brand={{ r.brand | urlencode }}&amp;model={{ r.model | urlencode }}&amp;{{ carry }}">{{ r.good_deals }}</a>{% else %}0{% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</form>
+<p class="small muted section">„Srednja polovina cena“ je raspon u kojem je polovina oglasa tog modela (od 25. do 75. percentila).
+  „Gubi godišnje“ dolazi iz prave linije kroz log cene po godištu i uključuje i to što stariji auti obično imaju više kilometara.</p>
+{% endif %}
+{% endblock %}

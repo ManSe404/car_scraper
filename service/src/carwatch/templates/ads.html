@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}Oglasi · Car Watch{% endblock %}
+{% block stats %}{{ stats.ads }} oglasa · {{ stats.dropped }} sa padom cene · poslednji snimak {{ stats.last_capture | date_time }}{% endblock %}
+{% block content %}
+<form class="filters" method="get" action="/">
+  {% if f.search %}<input type="hidden" name="search" value="{{ f.search }}">{% endif %}
+  <label>Traži<input type="search" name="q" value="{{ f.q or '' }}" placeholder="naslov, grad…"></label>
+  <label>Marka
+    <select name="brand"><option value="">sve</option>
+      {% for b in facets.brands %}<option {{ 'selected' if f.brand == b }}>{{ b }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>Model
+    <select name="model"><option value="">svi</option>
+      {% for m in facets.models %}<option {{ 'selected' if f.model == m }}>{{ m }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>Cena od<input class="short" name="price_min" inputmode="numeric" value="{{ f.price_min or '' }}"></label>
+  <label>Cena do<input class="short" name="price_max" inputmode="numeric" value="{{ f.price_max or '' }}"></label>
+  <label>Godište od<input class="short" name="year_min" inputmode="numeric" value="{{ f.year_min or '' }}"></label>
+  <label>Km do<input class="short" name="km_max" inputmode="numeric" value="{{ f.km_max or '' }}"></label>
+  <label>Sortiraj
+    <select name="sort">
+      {% for key, label in sorts.items() %}<option value="{{ key }}" {{ 'selected' if f.sort == key }}>{{ label }}</option>{% endfor %}
+    </select>
+  </label>
+  <label class="check"><input type="checkbox" name="dropped" value="1" {{ 'checked' if f.dropped }}> samo pala cena</label>
+  <label class="check"><input type="checkbox" name="active" value="1" {{ 'checked' if f.active_only }}> samo aktivni</label>
+  <button type="submit">Filtriraj</button>
+  <a href="/" class="small">poništi</a>
+</form>
+
+{% if search_name %}
+<p>Oglasi viđeni u pretrazi <strong>{{ search_name }}</strong> · <a href="/">prikaži sve</a></p>
+{% endif %}
+
+<div class="card" style="padding:0; overflow-x:auto">
+{% if rows %}
+<table>
+  <thead>
+    <tr>
+      <th></th><th>Oglas</th><th class="num">Godište</th><th class="num">Km</th><th>Gorivo</th>
+      <th class="num">Snaga</th><th>Menjač</th><th class="num">Cena</th><th>Grad</th><th>Prodavac</th>
+      <th>Viđen</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for a in rows %}
+    {% set drop = (a.price - a.max_price) if (a.price is not none and a.max_price is not none) else 0 %}
+    {% set rise = (a.price - a.min_price) if (a.price is not none and a.min_price is not none) else 0 %}
+    <tr>
+      <td>{% if a.image_url %}<img class="thumb" src="{{ a.image_url }}" alt="" loading="lazy">{% endif %}</td>
+      <td>
+        <a href="/ads/{{ a.id }}"><strong>{{ a.title }}</strong></a>
+        <a href="{{ a.url }}" target="_blank" rel="noopener noreferrer" title="Otvori na sajtu">↗</a>
+        <div class="small muted">{{ a.chassis or '' }}{% if a.engine_cc %} · {{ a.engine_cc | thousands }} cm³{% endif %}
+          {% if a.status and a.status != 'active' %}<span class="pill warn">{{ a.status }}</span>{% endif %}</div>
+      </td>
+      <td class="num">{{ a.year or '—' }}</td>
+      <td class="num">{{ a.mileage_km | km }}</td>
+      <td>{{ a.fuel or '—' }}</td>
+      <td class="num">{% if a.power_kw %}{{ a.power_kw }} kW{% if a.horse_power %} / {{ a.horse_power }} KS{% endif %}{% else %}—{% endif %}</td>
+      <td class="small">{{ a.gearbox or '—' }}</td>
+      <td class="num">
+        <strong>{{ a.price | money(a.currency) }}</strong>
+        {% if drop < 0 %}<span class="delta down" title="od najviše viđene cene">▼ {{ (-drop) | thousands }}</span>
+        {% elif rise > 0 %}<span class="delta up" title="od najniže viđene cene">▲ {{ rise | thousands }}</span>{% endif %}
+      </td>
+      <td>{{ a.city or '—' }}</td>
+      <td class="small">{{ 'Diler' if a.is_dealer else ('Privatno' if a.is_dealer is not none else '—') }}</td>
+      <td class="small">
+        od {{ a.first_seen | date }}<br>
+        <span class="muted">{{ a.days_seen }} {{ 'dan' if a.days_seen == 1 else 'dana' }} · posl. {{ a.last_seen | date }}</span>
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<div class="empty">
+  Još nema oglasa{% if f.q or f.brand or f.model or f.price_min or f.price_max or f.year_min or f.km_max or f.dropped %} za ove filtere{% endif %}.<br>
+  Otvori pretragu na polovniautomobili.com dok je ekstenzija uključena i oglasi će se pojaviti ovde.
+</div>
+{% endif %}
+</div>
+{% endblock %}

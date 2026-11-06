@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% from "_filters.html" import filter_form %}
+{% block title %}Uporedi · Car Watch{% endblock %}
+{% block content %}
+<h1>Uporedi modele</h1>
+
+{% if not series %}
+<div class="card empty">Na stranici <a href="/market">Tržište</a> štikliraj do {{ max_compare }} modela i klikni „Uporedi“.</div>
+{% else %}
+<form class="filters" method="get" action="/compare">
+  {% for k in keys %}<input type="hidden" name="m" value="{{ k }}">{% endfor %}
+  <label>Budžet<input class="short" name="budget" inputmode="numeric" value="{{ budget or '' }}"></label>
+  <label>Godište od<input class="short" name="year_min" inputmode="numeric" value="{{ f.year_min or '' }}"></label>
+  <label>Km do<input class="short" name="km_max" inputmode="numeric" value="{{ f.km_max or '' }}"></label>
+  <label>Menjač
+    <select name="gearbox"><option value="">svi</option>
+      {% for v in ['manuelni', 'automatski'] %}<option {{ 'selected' if f.gearbox == v }}>{{ v }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>Gorivo
+    <select name="fuel"><option value="">sva</option>
+      {% for v in facets.fuels %}<option {{ 'selected' if f.fuel == v }}>{{ v }}</option>{% endfor %}
+    </select>
+  </label>
+  <label class="check"><input type="checkbox" name="damaged" value="1" {{ 'checked' if f.include_damaged }}> i oštećeni</label>
+  <button type="submit">Primeni</button>
+</form>
+
+<div class="card">
+  <h2>Medijana cene po godištu</h2>
+  <div class="legend">
+    {% for label, slot, c in series %}<span><span class="sw" style="background:var(--s{{ slot }})"></span>{{ label }} <span class="muted">({{ c.n | thousands }})</span></span>{% endfor %}
+  </div>
+  {% if lines %}{{ lines | safe }}{% else %}<p class="muted">Nema dovoljno oglasa po godištu (treba bar 3 za jednu tačku).</p>{% endif %}
+  <p class="small muted">Tačka je medijana cene za to godište kad postoje bar 3 oglasa. Pređi mišem preko tačke za broj oglasa.</p>
+</div>
+
+<div class="card section" style="overflow-x:auto">
+  <h2>Šta dobijaš {% if budget %}za {{ budget | money }}{% else %}(bez ograničenja budžeta){% endif %}</h2>
+  <table>
+    <thead><tr><th>Model</th><th class="num">Oglasa</th><th class="num">Godište (medijana)</th><th class="num">Km (medijana)</th><th class="num">Cena (medijana)</th><th></th></tr></thead>
+    <tbody>
+    {% for label, slot, c in series %}
+      <tr>
+        <td><span class="sw" style="display:inline-block;width:10px;height:10px;border-radius:2px;background:var(--s{{ slot }});margin-right:6px"></span>{{ label }}</td>
+        <td class="num">{{ c.budget_n | thousands }}</td>
+        <td class="num">{{ c.budget_year_med | round | int if c.budget_year_med else '—' }}</td>
+        <td class="num">{{ c.budget_km_med | km if c.budget_km_med is not none else '—' }}</td>
+        <td class="num">{{ c.budget_price_med | money }}</td>
+        <td><a href="/deals?brand={{ c.brand | urlencode }}&amp;model={{ c.model | urlencode }}{% if budget %}&amp;price_max={{ budget }}{% endif %}&amp;min_count=1">ponude</a></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="card section">
+  <h2>Cena prema kilometraži</h2>
+  {% if scatter %}
+    <div class="legend">
+      {% for label, slot, c in series %}<span><span class="sw" style="background:var(--s{{ slot }})"></span>{{ label }}</span>{% endfor %}
+    </div>
+    {{ scatter | safe }}
+    <p class="small muted">Svaka tačka je jedan oglas (do 300 po modelu); klik otvara oglas.</p>
+  {% else %}
+    <p class="muted">Rasipanje prikazujem za najviše {{ max_scatter }} modela, jer se više boja na tačkama ne može pouzdano razlikovati.</p>
+  {% endif %}
+</div>
+
+<div class="card section" style="overflow-x:auto">
+  <h2>Tabela: medijana cene po godištu</h2>
+  <table>
+    <thead><tr><th>Godište</th>{% for label, slot, c in series %}<th class="num">{{ label }}</th>{% endfor %}</tr></thead>
+    <tbody>
+    {% for y in years | reverse %}
+      <tr><td>{{ y }}</td>
+        {% for label, slot, c in series %}
+          <td class="num">{% if y in c.by_year %}{{ c.by_year[y][0] | money }} <span class="muted small">({{ c.by_year[y][1] }})</span>{% else %}—{% endif %}</td>
+        {% endfor %}
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endblock %}

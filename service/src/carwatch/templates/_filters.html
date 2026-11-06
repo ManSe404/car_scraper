@@ -1,0 +1,36 @@
+{% macro filter_form(action, f, facets, show_min_count=true, hidden={}) %}
+<form class="filters" method="get" action="{{ action }}">
+  {% for name, value in hidden.items() %}<input type="hidden" name="{{ name }}" value="{{ value }}">{% endfor %}
+  <label>Cena od<input class="short" name="price_min" inputmode="numeric" value="{{ f.price_min or '' }}"></label>
+  <label>Cena do<input class="short" name="price_max" inputmode="numeric" value="{{ f.price_max or '' }}"></label>
+  <label>Godište od<input class="short" name="year_min" inputmode="numeric" value="{{ f.year_min or '' }}"></label>
+  <label>Godište do<input class="short" name="year_max" inputmode="numeric" value="{{ f.year_max or '' }}"></label>
+  <label>Km do<input class="short" name="km_max" inputmode="numeric" value="{{ f.km_max or '' }}"></label>
+  <label>Gorivo
+    <select name="fuel"><option value="">sva</option>
+      {% for v in facets.fuels %}<option {{ 'selected' if f.fuel == v }}>{{ v }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>Menjač
+    <select name="gearbox"><option value="">svi</option>
+      {% for v in ['manuelni', 'automatski'] %}<option {{ 'selected' if f.gearbox == v }}>{{ v }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>Karoserija
+    <select name="chassis"><option value="">sve</option>
+      {% for v in facets.chassis %}<option {{ 'selected' if f.chassis == v }}>{{ v }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>Marka
+    <select name="brand"><option value="">sve</option>
+      {% for v in facets.brands %}<option {{ 'selected' if f.brand == v }}>{{ v }}</option>{% endfor %}
+    </select>
+  </label>
+  {% if show_min_count %}
+  <label>Najmanje oglasa po modelu<input class="short" name="min_count" inputmode="numeric" value="{{ f.min_count }}"></label>
+  {% endif %}
+  <label class="check"><input type="checkbox" name="damaged" value="1" {{ 'checked' if f.include_damaged }}> i oštećeni</label>
+  <button type="submit">Primeni</button>
+  <a href="{{ action }}" class="small">poništi</a>
+</form>
+{% endmacro %}

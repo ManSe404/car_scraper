@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block title %}Povlačenje · Car Watch{% endblock %}
+{% block content %}
+<h1>Povlačenje podataka</h1>
+<p class="muted">Ekstenzija na svakih 10 minuta pita ovaj servis ima li posla. Kad ima, otvori zakačen tab sa sajtom u pozadini,
+  povlači stranu po stranu sa pauzom od oko {{ settings.request_gap_seconds | round(1) }} s i zatvori tab kad završi. Radi samo dok je
+  Chrome otvoren. Ako sajt odbije zahteve, sve staje na {{ settings.blocked_pause_hours }} h.</p>
+
+<div class="grid2">
+  <div class="card">
+    <h2>Stanje</h2>
+    <dl class="facts">
+      <dt>Sada</dt>
+      <dd>
+        {% if status.paused_until %}<span class="pill warn">pauzirano do {{ status.paused_until | date_time }}</span>
+        {% elif status.has_work %}<span class="pill good">ima posla</span>
+        {% else %}<span class="pill">nema posla</span>{% endif %}
+      </dd>
+      {% if status.run %}
+      {% set r = status.run %}
+      <dt>Poslednje povlačenje</dt>
+      <dd>{{ 'ceo sajt' if r.kind == 'full' else 'jedna pretraga' }} · {{ r.status }} · od {{ r.started_at | date_time }}</dd>
+      <dt>Napredak</dt>
+      <dd>
+        <div class="bar"><span style="width: {{ (100 * r.tasks_done / r.tasks_total) | round(1) if r.tasks_total else 0 }}%"></span></div>
+        <span class="small">{{ r.tasks_done | thousands }} od {{ r.tasks_total | thousands }} strana{% if r.tasks_failed %}, {{ r.tasks_failed }} neuspelih{% endif %} ·
+          {{ r.ads_seen | thousands }} oglasa viđeno</span>
+      </dd>
+      {% endif %}
+      <dt>Sledeće puno</dt><dd>{{ status.next_full_run | date_time if status.next_full_run else 'odmah' }}</dd>
+      <dt>Detalji danas</dt><dd>{{ status.details_today }} od {{ status.details_limit }}</dd>
+    </dl>
+    <div class="section">
+      <form class="inline" method="post" action="/runs/start"><button type="submit">Pokreni ceo sajt sada</button></form>
+      {% if status.paused_until %}
+        <form class="inline" method="post" action="/runs/resume"><button class="secondary" type="submit">Nastavi</button></form>
+      {% else %}
+        <form class="inline" method="post" action="/runs/pause"><button class="secondary" type="submit">Pauziraj 24 h</button></form>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Procena fer cene</h2>
+    {% if valuation %}
+    <dl class="facts">
+      <dt>Izračunato</dt><dd>{{ valuation.computed_at | date_time }}</dd>
+      <dt>Oglasa</dt><dd>{{ valuation.ads | thousands }}</dd>
+      <dt>Tipična greška</dt><dd>{{ ((valuation.median_error_pct * 100) | round(1) ~ ' %') if valuation.median_error_pct is not none else '—' }}</dd>
+      {% if valuation.note %}<dt>Napomena</dt><dd>{{ valuation.note }}</dd>{% endif %}
+    </dl>
+    {% else %}<p class="muted">Još nije računata. Računa se sama posle svakog punog povlačenja.</p>{% endif %}
+    <div class="section">
+      <form class="inline" method="post" action="/analysis/run"><button type="submit" {{ 'disabled' if valuating }}>{{ 'Računam…' if valuating else 'Izračunaj sada' }}</button></form>
+    </div>
+    <h2 class="section">Podešavanja</h2>
+    <dl class="facts small">
+      <dt>Ceo sajt</dt><dd>na svakih {{ settings.crawl_interval_days }} dana</dd>
+      <dt>Detalji</dt><dd>do {{ settings.details_daily_limit }} dnevno{% if settings.details_price_max or settings.details_year_min %}, prvo
+        {% if settings.details_price_max %}do {{ settings.details_price_max | money }}{% endif %}
+        {% if settings.details_year_min %}od {{ settings.details_year_min }}.{% endif %}{% else %}, prvo najbolje ponude{% endif %}</dd>
+      <dt>Pauza između zahteva</dt><dd>{{ settings.request_gap_seconds }} s</dd>
+    </dl>
+    <p class="small muted">Menjaju se promenljivama okruženja <code>CARWATCH_*</code> (npr. <code>CARWATCH_DETAILS_PRICE_MAX=10000</code>).</p>
+  </div>
+</div>
+
+<div class="card section" style="padding:0; overflow-x:auto">
+<table>
+  <thead><tr><th>#</th><th>Vrsta</th><th>Početak</th><th>Kraj</th><th>Status</th><th class="num">Strane</th><th class="num">Oglasa</th><th></th></tr></thead>
+  <tbody>
+  {% for r in runs %}
+    <tr>
+      <td>{{ r.id }}</td>
+      <td>{{ 'ceo sajt' if r.kind == 'full' else 'pretraga' }}</td>
+      <td>{{ r.started_at | date_time }}</td>
+      <td>{{ r.finished_at | date_time if r.finished_at else '—' }}</td>
+      <td>{{ r.status }}</td>
+      <td class="num">{{ r.tasks_done | thousands }} / {{ r.tasks_total | thousands }}{% if r.tasks_failed %} <span class="muted">({{ r.tasks_failed }} neusp.)</span>{% endif %}</td>
+      <td class="num">{{ r.ads_seen | thousands }}</td>
+      <td>{% if r.status == 'running' %}<form class="inline" method="post" action="/runs/{{ r.id }}/cancel"><button class="secondary" type="submit">Otkaži</button></form>{% endif %}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="8" class="empty">Još nijedno povlačenje.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}

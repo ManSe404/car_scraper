@@ -1,0 +1,54 @@
+[project]
+name = "carwatch"
+version = "0.1.0"
+description = "Local service that stores car ads captured by the Car Watch browser extension and shows them in a small web UI."
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi>=0.162.0",
+    "jinja2>=3.1.6",
+    "numpy>=2.5.4",
+    "pydantic>=2.14.2",
+    "pydantic-settings>=2.16.2",
+    "scikit-learn>=1.9.1",
+    "threadpoolctl>=3.7.0",
+    "uvicorn[standard]>=0.54.0",
+]
+
+[project.scripts]
+carwatch = "carwatch.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/carwatch"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 120
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM", "RUF"]
+# The UI uses a real minus sign in price differences.
+allowed-confusables = ["−"]
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28.1",
+    "mypy>=2.4.1",
+    "pytest>=9.2.0",
+    "ruff>=0.17.3",
+]
+
+[tool.mypy]
+strict = true
+
+[[tool.mypy.overrides]]
+# scikit-learn and threadpoolctl ship no type information.
+module = ["sklearn.*", "threadpoolctl"]
+ignore_missing_imports = true

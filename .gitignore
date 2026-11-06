@@ -1,1 +1,19 @@
-.idea
+.idea/
+.vscode/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+*.db
+*.db-wal
+*.db-shm
+
+# Extension
+node_modules/
+.output/
+.wxt/
+*.zip
+.mypy_cache/

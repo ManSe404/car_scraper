@@ -1,0 +1,18 @@
+# systemd user unit for the Car Watch service.
+#   cp deploy/carwatch.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload && systemctl --user enable --now carwatch
+# ExecStart points at the venv binary directly, so the unit does not depend on PATH (uv, ~/.local/bin).
+[Unit]
+Description=Car Watch: local store and UI for polovniautomobili.com ads
+After=default.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/Projekti/Personal/car_scraper/service
+ExecStart=%h/Projekti/Personal/car_scraper/service/.venv/bin/carwatch serve
+Restart=on-failure
+RestartSec=5
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=default.target

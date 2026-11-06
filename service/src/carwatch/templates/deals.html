@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% from "_filters.html" import filter_form %}
+{% block title %}Ponude · Car Watch{% endblock %}
+{% block content %}
+<h1>Najbolje ponude</h1>
+{% if valuation and valuation.median_error_pct is not none %}
+<p class="muted">„Fer cena“ je procena modela koji je učio na {{ valuation.ads | thousands }} oglasa iz istog snimka (marka, model, godište,
+  km, snaga, kubikaža, gorivo, menjač, karoserija, diler, oštećenje i uvoz kad su poznati). Svaki oglas je procenjen modelom koji
+  taj oglas nije video. Tipična greška procene je {{ (valuation.median_error_pct * 100) | round(1) }} %, pa razlika manja od toga
+  nije pravi popust. Izračunato {{ valuation.computed_at | date_time }}.</p>
+{% endif %}
+
+{{ filter_form('/deals', f, facets, hidden={'model': f.model} if f.model else {}) }}
+{% if f.model %}<p>Samo <strong>{{ f.brand }} {{ f.model }}</strong> · <a href="/deals">svi modeli</a></p>{% endif %}
+
+{% if not valuation or valuation.median_error_pct is none %}
+<div class="card empty">
+  Procena fer cene još nije izračunata{% if valuation and valuation.note %} ({{ valuation.note }}){% endif %}.
+  Računa se sama posle punog povlačenja; možeš je pokrenuti i ručno na stranici <a href="/runs">Povlačenje</a>.
+</div>
+{% elif not rows %}
+<div class="card empty">Nema oglasa za ove filtere.</div>
+{% else %}
+<div class="card" style="padding:0; overflow-x:auto">
+<table>
+  <thead>
+    <tr><th></th><th>Oglas</th><th class="num">Godište</th><th class="num">Km</th><th class="num">Snaga</th><th>Menjač</th>
+        <th class="num">Cena</th><th class="num">Fer cena</th><th class="num">Ispod fer cene</th><th>Napomene</th><th>Grad</th></tr>
+  </thead>
+  <tbody>
+  {% for car, comparables in rows %}
+    <tr>
+      <td>{% if car.image_url %}<img class="thumb" src="{{ car.image_url }}" alt="" loading="lazy">{% endif %}</td>
+      <td>
+        <a href="/ads/{{ car.id }}"><strong>{{ car.title }}</strong></a>
+        <a href="{{ car.url }}" target="_blank" rel="noopener noreferrer" title="Otvori na sajtu">↗</a>
+        <div class="small muted">{{ car.brand }} {{ car.model }} · {{ comparables }} uporedivih oglasa</div>
+      </td>
+      <td class="num">{{ car.year or '—' }}</td>
+      <td class="num">{{ car.km | km }}</td>
+      <td class="num">{{ (car.power_kw ~ ' kW') if car.power_kw else '—' }}</td>
+      <td class="small">{{ car.gearbox or '—' }}</td>
+      <td class="num"><strong>{{ car.price | money }}</strong></td>
+      <td class="num">{{ car.expected | money }}</td>
+      <td class="num"><span class="pill good">{{ ((car.deal_pct * 100) | round(0) | int) }} %</span></td>
+      <td class="small">
+        {% if car.deal_pct > suspicious %}<span class="pill warn" title="Mnogo ispod tržišta: proveri da cena nije greška, auto oštećen ili oglas lažan">proveri</span>{% endif %}
+        {% if car.damaged %}<span class="pill warn">oštećen</span>{% endif %}
+        {% if car.from_abroad %}<span class="pill">uvoz</span>{% endif %}
+        {% if not car.has_details %}<span class="pill" title="Stanje, registracija i poreklo još nisu povučeni">bez detalja</span>{% endif %}
+        {% if car.is_dealer %}<span class="pill">diler</span>{% endif %}
+      </td>
+      <td class="small">{{ car.city or '—' }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+{% endblock %}
